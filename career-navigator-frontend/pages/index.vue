@@ -1,7 +1,9 @@
 <template>
   <div class="vacancies-container">
     <h1>Список вакансий</h1>
-    
+
+    <button @click="handleLogout" class="logout-button">Выйти</button>
+
     <div class="vacancy-card" v-for="vacancy in vacancies" :key="vacancy.vacancy_id">
       <h2>{{ vacancy.title }}</h2>
       <p class="company-name">{{ vacancy.employer?.company_name }}</p>
@@ -22,8 +24,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
 const vacancies = ref([])
+const router = useRouter()
 
 const fetchVacancies = async () => {
   try {
@@ -35,6 +39,13 @@ const fetchVacancies = async () => {
   }
 }
 
+const handleLogout = () => {
+  // Удаляем токен из localStorage
+  localStorage.removeItem('auth_token')
+  // Перенаправляем на страницу входа
+  router.push('/login')
+}
+
 onMounted(fetchVacancies)
 </script>
 
@@ -43,6 +54,22 @@ onMounted(fetchVacancies)
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.logout-button {
+  padding: 8px 16px;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.logout-button:hover {
+  background-color: #c0392b;
 }
 
 .vacancy-card {

@@ -1,42 +1,53 @@
-// index.js (основной серверный файл)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const sequelize = require('./db');
-const { Employer, Vacancy } = require('./models');
+const { Employer, Vacancy, University, Applicant } = require('./models');
 
 const app = express();
 const PORT = 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key';
 
 app.use(cors());
 app.use(express.json());
 
-// Проверка подключения к БД
 sequelize.authenticate()
   .then(() => console.log('Database connected...'))
   .catch(err => console.error('Connection error:', err));
 
-// Синхронизация моделей с БД
 sequelize.sync()
   .then(() => console.log('Models synchronized with database'))
   .catch(err => console.error('Sync error:', err));
 
-// Маршруты
 app.get('/', (req, res) => {
   res.send('Career Navigator API is running');
 });
+
+// Middleware для проверки JWT-токена
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
 
 // Получение всех вакансий с информацией о работодателе
 app.get('/api/vacancies', async (req, res) => {
   try {
     const vacancies = await Vacancy.findAll({
-      include: [
-        {
-          model: Employer,
-          as: 'employer',
-          attributes: ['company_name', 'contact_phone']
-        }
-      ],
+      include: [{
+        model: Employer,
+        as: 'employer',
+        attributes: ['company_name', 'contact_phone']
+      }],
       order: [['created_at', 'DESC']]
     });
     res.json(vacancies);
@@ -45,17 +56,12 @@ app.get('/api/vacancies', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-// Добавление вакансии
-app.post('/api/vacancies', async (req, res) => {
+
+// Добавление вакансии (защищено JWT)
+app.post('/api/vacancies', authenticateToken, async (req, res) => {
   try {
     const { title, description, min_salary, max_salary, employer_id } = req.body;
-    const vacancy = await Vacancy.create({ 
-      title, 
-      description,
-      min_salary,
-      max_salary,
-      employer_id
-    });
+    const vacancy = await Vacancy.create({ title, description, min_salary, max_salary, employer_id });
     res.status(201).json(vacancy);
   } catch (error) {
     console.error('Error creating vacancy:', error);
@@ -63,18 +69,116 @@ app.post('/api/vacancies', async (req, res) => {
   }
 });
 
-// Обработка ошибок
+// Универсальный маршрут регистрации
+app.post('/api/register', async (req, res) => {
+  try {
+    const { role, email, password, company_name, contact_phone, full_name, phone, university_name } = req.body;
+
+    if (!role || !email) {
+      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Некорректный email' });
+    }
+
+    if ((role === 'employer' || role === 'applicant' || role === 'university') && !password) {
+      return res.status(400).json({ error: 'Пароль обязателен' });
+    }
+
+    const password_hash = password ? await bcrypt.hash(password, 10) : null;
+
+    if (role === 'employer') {
+      if (!company_name) return res.status(400).json({ error: 'Введите название компании' });
+
+      const exists = await Employer.findOne({ where: { email } });
+      if (exists) return res.status(400).json({ error: 'Работодатель с таким email уже существует' });
+
+      const newEmployer = await Employer.create({ company_name, email, password_hash, contact_phone });
+      return res.status(201).json({ message: 'Работодатель зарегистрирован', employer_id: newEmployer.employer_id });
+
+    } else if (role === 'applicant') {
+      if (!full_name) return res.status(400).json({ error: 'Введите полное имя' });
+
+      const exists = await Applicant.findOne({ where: { email } });
+      if (exists) return res.status(400).json({ error: 'Абитуриент с таким email уже существует' });
+
+      const newApplicant = await Applicant.create({ full_name, email, password_hash, phone });
+      return res.status(201).json({ message: 'Абитуриент зарегистрирован', applicant_id: newApplicant.applicant_id });
+
+    } else if (role === 'university') {
+      if (!university_name) return res.status(400).json({ error: 'Введите название вуза' });
+
+      const exists = await University.findOne({ where: { contact_email: email } });
+      if (exists) return res.status(400).json({ error: 'Вуз с таким email уже существует' });
+
+      const newUniversity = await University.create({ name: university_name, contact_email: email, password_hash });
+      return res.status(201).json({ message: 'Вуз зарегистрирован', university_id: newUniversity.university_id });
+
+    } else {
+      return res.status(400).json({ error: 'Неизвестная роль' });
+    }
+  } catch (error) {
+    console.error('Ошибка регистрации:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Универсальный маршрут входа
+app.post('/api/login', async (req, res) => {
+  try {
+    const { role, email, password } = req.body;
+
+    if (!role || !email || !password) {
+      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+    }
+
+    let user = null;
+
+    if (role === 'employer') {
+      user = await Employer.findOne({ where: { email } });
+    } else if (role === 'applicant') {
+      user = await Applicant.findOne({ where: { email } });
+    } else if (role === 'university') {
+      user = await University.findOne({ where: { contact_email: email } });
+    } else {
+      return res.status(400).json({ error: 'Неизвестная роль' });
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Неверный email или пароль' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Неверный email или пароль' });
+    }
+
+    const payload = { role };
+    if (role === 'employer') payload.employer_id = user.employer_id;
+    if (role === 'applicant') payload.applicant_id = user.applicant_id;
+    if (role === 'university') payload.university_id = user.university_id;
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+
+    res.json({ message: 'Успешный вход', token, role });
+  } catch (error) {
+    console.error('Ошибка входа:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Обработчики ошибок
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send('Something broke!');
 });
 
-// Обработка 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Запуск сервера
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

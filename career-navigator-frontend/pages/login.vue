@@ -3,10 +3,21 @@
     <h1>Вход в систему</h1>
     <form @submit.prevent="handleLogin">
       <div class="form-group">
+        <label>Роль</label>
+        <select v-model="role" required>
+          <option value="" disabled>Выберите роль</option>
+          <option value="employer">Работодатель</option>
+          <option value="applicant">Абитуриент</option>
+          <option value="university">Вуз</option>
+        </select>
+      </div>
+
+      <div class="form-group">
         <label for="email">Email</label>
         <input id="email" type="email" v-model="email" required placeholder="Введите email" />
       </div>
 
+      <!-- Пароль теперь для всех ролей -->
       <div class="form-group">
         <label for="password">Пароль</label>
         <input id="password" type="password" v-model="password" required placeholder="Введите пароль" />
@@ -28,6 +39,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+const role = ref('')
 const email = ref('')
 const password = ref('')
 const error = ref('')
@@ -35,21 +47,49 @@ const router = useRouter()
 
 const handleLogin = async () => {
   error.value = ''
+
+  if (!role.value) {
+    error.value = 'Выберите роль'
+    return
+  }
+
+  if (!email.value || !password.value) {
+    error.value = 'Пожалуйста, заполните все поля'
+    return
+  }
+
   try {
-    // TODO: заменить на вызов вашего API авторизации
-    if (!email.value || !password.value) {
-      error.value = 'Пожалуйста, заполните все поля'
+    const payload = {
+      role: role.value,
+      email: email.value,
+      password: password.value, // отправляем пароль всегда
+    }
+
+    const response = await fetch('http://localhost:3001/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      error.value = data.error || 'Неверный email или пароль'
       return
     }
-    // Пример успешного входа:
-    console.log('Логин:', email.value, password.value)
-    // После успешного входа редирект на главную или личный кабинет
-    router.push('/')
+
+    if (data.token) {
+      localStorage.setItem('auth_token', data.token)
+      localStorage.setItem('role', role.value)
+    }
+
+    await router.push('/')
   } catch (e) {
     error.value = 'Ошибка входа: ' + (e.message || 'Неизвестная ошибка')
   }
 }
 </script>
+
 
 <style scoped>
 .auth-container {
