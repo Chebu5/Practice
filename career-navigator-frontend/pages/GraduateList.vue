@@ -1,0 +1,137 @@
+<template>
+  <div class="graduates-container">
+    <h2>Профили выпускников</h2>
+
+    <div class="filters">
+      <label>Фильтр по специальности</label>
+      <input v-model="filterSpecialty" placeholder="Специальность" />
+
+      <label>Фильтр по вузу</label>
+      <input v-model="filterUniversity" placeholder="Вуз" />
+
+      <button @click="fetchGraduates" :disabled="loading">
+        {{ loading ? 'Загрузка...' : 'Поиск' }}
+      </button>
+    </div>
+
+    <ul class="graduates-list">
+      <li v-for="graduate in graduates" :key="graduate.graduate_id" class="graduate-item">
+        <strong>{{ graduate.full_name }}</strong> — {{ graduate.specialty }} — {{ graduate.university }}
+      </li>
+    </ul>
+
+    <div v-if="error" class="error">{{ error }}</div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const graduates = ref([])
+const filterSpecialty = ref('')
+const filterUniversity = ref('')
+const loading = ref(false)
+const error = ref(null)
+
+const token = localStorage.getItem('auth_token')
+
+const fetchGraduates = async () => {
+  loading.value = true
+  error.value = null
+  const params = new URLSearchParams()
+  if (filterSpecialty.value) params.append('specialty', filterSpecialty.value)
+  if (filterUniversity.value) params.append('university', filterUniversity.value)
+
+  try {
+    const res = await fetch('/api/graduates?' + params.toString(), {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (res.ok) {
+      graduates.value = await res.json()
+    } else {
+      error.value = 'Ошибка загрузки выпускников'
+    }
+  } catch (e) {
+    error.value = 'Ошибка сети или сервера'
+  } finally {
+    loading.value = false
+  }
+}
+
+fetchGraduates()
+</script>
+
+<style scoped>
+.graduates-container {
+  max-width: 700px;
+  margin: 30px auto;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 10px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+
+.filters label {
+  flex-basis: 100%;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #333;
+}
+
+.filters input {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 16px;
+  flex-grow: 1;
+}
+
+.filters button {
+  padding: 10px 20px;
+  background-color: #3498db;
+  border: none;
+  color: white;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.filters button:disabled {
+  background-color: #7fb3d5;
+  cursor: not-allowed;
+}
+
+.filters button:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.graduates-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.graduate-item {
+  background: white;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.error {
+  color: red;
+  margin-top: 15px;
+  font-weight: 600;
+}
+</style>

@@ -4,7 +4,17 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const sequelize = require('./db');
-const { Employer, Vacancy, University, Applicant } = require('./models');
+const {
+  Employer,
+  Vacancy,
+  University,
+  Applicant,
+  EducationRequirement,
+  VacancySkill,
+  Skill,
+  Graduate,
+  EmployerUniversityMessage
+} = require('./models');
 
 const app = express();
 const PORT = 3001;
@@ -38,36 +48,6 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
-
-// Получение всех вакансий с информацией о работодателе
-app.get('/api/vacancies', async (req, res) => {
-  try {
-    const vacancies = await Vacancy.findAll({
-      include: [{
-        model: Employer,
-        as: 'employer',
-        attributes: ['company_name', 'contact_phone']
-      }],
-      order: [['created_at', 'DESC']]
-    });
-    res.json(vacancies);
-  } catch (error) {
-    console.error('Error fetching vacancies:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Добавление вакансии (защищено JWT)
-app.post('/api/vacancies', authenticateToken, async (req, res) => {
-  try {
-    const { title, description, min_salary, max_salary, employer_id } = req.body;
-    const vacancy = await Vacancy.create({ title, description, min_salary, max_salary, employer_id });
-    res.status(201).json(vacancy);
-  } catch (error) {
-    console.error('Error creating vacancy:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Универсальный маршрут регистрации
 app.post('/api/register', async (req, res) => {
@@ -166,6 +146,194 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error('Ошибка входа:', error);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Получение всех вакансий с информацией о работодателе
+app.get('/api/vacancies', async (req, res) => {
+  try {
+    const vacancies = await Vacancy.findAll({
+      include: [{
+        model: Employer,
+        as: 'employer',
+        attributes: ['company_name', 'contact_phone']
+      }],
+      order: [['created_at', 'DESC']]
+    });
+    res.json(vacancies);
+  } catch (error) {
+    console.error('Error fetching vacancies:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Добавление вакансии с требованиями и навыками (защищено JWT)
+app.post('/api/employer/vacancies', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, min_salary, max_salary, educationRequirements, skillIds } = req.body;
+
+    const vacancy = await Vacancy.create({
+      title,
+      description,
+      min_salary,
+      max_salary,
+      employer_id: req.user.employer_id,
+    });
+
+    if (Array.isArray(educationRequirements)) {
+      for (const reqEd of educationRequirements) {
+        await EducationRequirement.create({
+          vacancy_id: vacancy.vacancy_id,
+          specialization_id: reqEd.specialization_id,
+          degree_level: reqEd.degree_level,
+        });
+      }
+    }
+
+    if (Array.isArray(skillIds)) {
+      for (const skillId of skillIds) {
+        await VacancySkill.create({
+          vacancy_id: vacancy.vacancy_id,
+          skill_id: skillId,
+        });
+      }
+    }
+
+    res.status(201).json(vacancy);
+  } catch (error) {
+    console.error('Error creating vacancy:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Получение вакансий работодателя с требованиями и навыками
+app.get('/api/employer/vacancies', authenticateToken, async (req, res) => {
+  try {
+    const vacancies = await Vacancy.findAll({
+      where: { employer_id: req.user.employer_id },
+      include: [
+        {
+          model: EducationRequirement,
+          as: 'educationRequirements'
+        },
+        {
+          model: Skill,
+          as: 'skills',
+          through: { attributes: [] }
+        }
+      ]
+    });
+    res.json(vacancies);
+  } catch (error) {
+    console.error('Error fetching employer vacancies:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Личный кабинет работодателя - получение профиля
+app.get('/api/employer/profile', authenticateToken, async (req, res) => {
+  try {
+    const employer = await Employer.findByPk(req.user.employer_id, {
+      attributes: ['employer_id', 'company_name', 'email', 'contact_phone']
+    });
+    if (!employer) return res.status(404).json({ error: 'Работодатель не найден' });
+    res.json(employer);
+  } catch (error) {
+    console.error('Error fetching employer profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Личный кабинет работодателя - обновление профиля
+app.put('/api/employer/profile', authenticateToken, async (req, res) => {
+  try {
+    const { company_name, contact_phone } = req.body;
+    const employer = await Employer.findByPk(req.user.employer_id);
+    if (!employer) return res.status(404).json({ error: 'Работодатель не найден' });
+
+    if (company_name !== undefined) employer.company_name = company_name;
+    if (contact_phone !== undefined) employer.contact_phone = contact_phone;
+    await employer.save();
+
+    res.json({ message: 'Профиль обновлен', employer });
+  } catch (error) {
+    console.error('Error updating employer profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Просмотр профилей выпускников с фильтрацией
+app.get('/api/graduates', authenticateToken, async (req, res) => {
+  try {
+    const { specialty, university } = req.query;
+    const where = {};
+    if (specialty) where.specialty = specialty;
+    if (university) where.university = university;
+
+    const graduates = await Graduate.findAll({ where });
+    res.json(graduates);
+  } catch (error) {
+    console.error('Error fetching graduates:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// Удаление вакансии работодателем
+app.delete('/api/employer/vacancies/:id', authenticateToken, async (req, res) => {
+  try {
+    const vacancyId = req.params.id;
+
+    // Проверяем, принадлежит ли вакансия текущему работодателю
+    const vacancy = await Vacancy.findOne({
+      where: {
+        vacancy_id: vacancyId,
+        employer_id: req.user.employer_id
+      }
+    });
+
+    if (!vacancy) {
+      return res.status(404).json({ error: 'Вакансия не найдена или не принадлежит вам' });
+    }
+
+    // Удаляем связанные требования к образованию и навыки (если настроены каскадно, можно не делать явно)
+    await EducationRequirement.destroy({ where: { vacancy_id: vacancyId } });
+    await VacancySkill.destroy({ where: { vacancy_id: vacancyId } });
+
+    // Удаляем саму вакансию
+    await vacancy.destroy();
+
+    res.json({ message: 'Вакансия удалена' });
+  } catch (error) {
+    console.error('Error deleting vacancy:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Отправка сообщений вузам
+app.post('/api/employer/messages', authenticateToken, async (req, res) => {
+  try {
+    const { university_id, message } = req.body;
+    const newMessage = await EmployerUniversityMessage.create({
+      employer_id: req.user.employer_id,
+      university_id,
+      message,
+      status: 'sent',
+      created_at: new Date(),
+    });
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Получение истории сообщений работодателя
+app.get('/api/employer/messages', authenticateToken, async (req, res) => {
+  try {
+    const messages = await EmployerUniversityMessage.findAll({ where: { employer_id: req.user.employer_id } });
+    res.json(messages);
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

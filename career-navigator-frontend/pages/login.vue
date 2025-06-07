@@ -62,7 +62,7 @@ const handleLogin = async () => {
     const payload = {
       role: role.value,
       email: email.value,
-      password: password.value, // отправляем пароль всегда
+      password: password.value,
     }
 
     const response = await fetch('http://localhost:3001/api/login', {
@@ -81,16 +81,28 @@ const handleLogin = async () => {
     if (data.token) {
       localStorage.setItem('auth_token', data.token)
       localStorage.setItem('role', role.value)
-    }
 
-    await router.push('/')
+      // Перенаправление в зависимости от роли
+      switch (role.value) {
+        case 'employer':
+          await router.push('/')
+          break
+        case 'university':
+          await router.push('/UniversityProfile')
+          break
+        case 'applicant':
+          await router.push('/ApplicantProfile')
+          break
+        default:
+          await router.push('/')
+      }
+    }
   } catch (e) {
     error.value = 'Ошибка входа: ' + (e.message || 'Неизвестная ошибка')
   }
 }
+
 </script>
-
-
 <style scoped>
 .auth-container {
   max-width: 400px;

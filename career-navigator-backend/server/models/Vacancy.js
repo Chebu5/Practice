@@ -21,6 +21,14 @@ const Vacancy = sequelize.define('Vacancy', {
   max_salary: {
     type: DataTypes.INTEGER
   },
+  specialty: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  requirements: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   employer_id: {
     type: DataTypes.INTEGER,
     references: {
@@ -37,5 +45,18 @@ const Vacancy = sequelize.define('Vacancy', {
   timestamps: false,
   underscored: true
 });
+
+Vacancy.associate = (models) => {
+  Vacancy.hasMany(models.EducationRequirement, {
+    foreignKey: 'vacancy_id',
+    as: 'educationRequirements'
+  });
+
+  Vacancy.belongsToMany(models.Skill, {
+    through: models.VacancySkill,
+    foreignKey: 'vacancy_id',
+    as: 'skills'
+  });
+};
 
 module.exports = Vacancy;
