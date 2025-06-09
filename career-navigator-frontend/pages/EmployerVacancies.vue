@@ -14,15 +14,13 @@
 
       <h3>Требования к образованию</h3>
       <div v-for="(req, index) in educationRequirements" :key="index" class="education-requirement">
-        <input v-model.number="req.specialization_id" placeholder="ID специальности" required />
         <select v-model="req.degree_level" required>
           <option>Бакалавр</option>
           <option>Магистр</option>
           <option>Специалитет</option>
         </select>
-        <button @click.prevent="removeEducationRequirement(index)" class="remove-btn">Удалить</button>
       </div>
-      <button @click.prevent="addEducationRequirement" class="add-btn">Добавить требование</button>
+      
 
       <h3>Навыки (ID через запятую)</h3>
       <input v-model="skillIdsInput" placeholder="1,2,3" />
@@ -50,7 +48,8 @@ const max_salary = ref(null)
 const educationRequirements = ref([{ specialization_id: null, degree_level: 'Бакалавр' }])
 const skillIdsInput = ref('')
 const vacancies = ref([])
-
+const specialty = ref('')
+const requirements = ref('')
 const token = localStorage.getItem('auth_token')
 
 const fetchVacancies = async () => {
@@ -59,22 +58,17 @@ const fetchVacancies = async () => {
   })
   if (res.ok) vacancies.value = await res.json()
 }
-
-const addEducationRequirement = () => {
-  educationRequirements.value.push({ specialization_id: null, degree_level: 'Бакалавр' })
-}
-const removeEducationRequirement = (index) => {
-  educationRequirements.value.splice(index, 1)
-}
-
 const submitVacancy = async () => {
   const skillIds = skillIdsInput.value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id))
+
+  const specialtyValue = educationRequirements.value.length > 0 ? educationRequirements.value[0].degree_level : ''
 
   const payload = {
     title: title.value,
     description: description.value,
     min_salary: min_salary.value,
     max_salary: max_salary.value,
+    specialty: specialtyValue,  // передаём уровень образования в specialty вакансии
     educationRequirements: educationRequirements.value,
     skillIds,
   }

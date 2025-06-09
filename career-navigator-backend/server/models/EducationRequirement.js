@@ -18,10 +18,6 @@ const EducationRequirement = db.define('EducationRequirement', {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'
   },
-  specialization_id: { 
-    type: DataTypes.INTEGER, 
-    allowNull: false 
-  },
   degree_level: { 
     type: DataTypes.STRING, 
     allowNull: false 

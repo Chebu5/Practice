@@ -48,7 +48,85 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+// Получение профиля абитуриента
+app.get('/api/applicant/profile', authenticateToken, async (req, res) => {
+  try {
+    // Проверяем, что в токене есть applicant_id
+    if (!req.user.applicant_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
 
+    const applicant = await Applicant.findByPk(req.user.applicant_id, {
+      attributes: ['applicant_id', 'full_name', 'email', 'phone']
+    });
+
+    if (!applicant) {
+      return res.status(404).json({ error: 'Абитуриент не найден' });
+    }
+
+    res.json(applicant);
+  } catch (error) {
+    console.error('Ошибка получения профиля абитуриента:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Обновление профиля абитуриента
+app.put('/api/applicant/profile', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.applicant_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+
+    const { full_name, phone } = req.body;
+
+    const applicant = await Applicant.findByPk(req.user.applicant_id);
+    if (!applicant) {
+      return res.status(404).json({ error: 'Абитуриент не найден' });
+    }
+
+    if (full_name !== undefined) applicant.full_name = full_name;
+    if (phone !== undefined) applicant.phone = phone;
+
+    await applicant.save();
+
+    res.json({ message: 'Профиль абитуриента обновлён', applicant });
+  } catch (error) {
+    console.error('Ошибка обновления профиля абитуриента:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+//////////////////
+app.get('/api/applicant/vacancies', authenticateToken, async (req, res) => {
+  try {
+    const vacancies = await Vacancy.findAll({
+  include: [
+    {
+      model: Employer,
+      as: 'employer',
+      attributes: ['company_name']  // или другие нужные поля
+    },
+    {
+      model: EducationRequirement,
+      as: 'educationRequirements',
+      attributes: ['degree_level'] // без специализации
+    },
+    {
+      model: Skill,
+      as: 'skills',
+      attributes: ['name'], // или нужные поля
+      through: { attributes: [] } // чтобы не возвращать данные из промежуточной таблицы
+    }
+  ],
+  order: [['created_at', 'DESC']]
+});
+    res.json(vacancies)
+  } catch (error) {
+    console.error('Ошибка получения вакансий:', error)
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' })
+  }
+})
+/////////////
 // Универсальный маршрут регистрации
 app.post('/api/register', async (req, res) => {
   try {
@@ -170,13 +248,14 @@ app.get('/api/vacancies', async (req, res) => {
 // Добавление вакансии с требованиями и навыками (защищено JWT)
 app.post('/api/employer/vacancies', authenticateToken, async (req, res) => {
   try {
-    const { title, description, min_salary, max_salary, educationRequirements, skillIds } = req.body;
+    const { title, description, min_salary, max_salary, specialty, educationRequirements, skillIds } = req.body;
 
     const vacancy = await Vacancy.create({
       title,
       description,
       min_salary,
       max_salary,
+      specialty,  // сохраняем уровень образования в поле specialty вакансии
       employer_id: req.user.employer_id,
     });
 
@@ -184,7 +263,7 @@ app.post('/api/employer/vacancies', authenticateToken, async (req, res) => {
       for (const reqEd of educationRequirements) {
         await EducationRequirement.create({
           vacancy_id: vacancy.vacancy_id,
-          specialization_id: reqEd.specialization_id,
+          specialization_id: reqEd.specialization_id || null, // если есть, иначе null
           degree_level: reqEd.degree_level,
         });
       }
@@ -205,7 +284,6 @@ app.post('/api/employer/vacancies', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 // Получение вакансий работодателя с требованиями и навыками
 app.get('/api/employer/vacancies', authenticateToken, async (req, res) => {
   try {
