@@ -14,11 +14,13 @@ const Graduate = sequelize.define('Graduate', {
   specialty: {
     type: DataTypes.STRING,
   },
-  university: {
-    type: DataTypes.STRING,
-  },
-  skills: {
-    type: DataTypes.TEXT, // или JSONB, если поддерживается
+  university_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'universities',
+      key: 'university_id'
+    }
   },
   contact_email: {
     type: DataTypes.STRING,
@@ -31,5 +33,6 @@ const Graduate = sequelize.define('Graduate', {
   timestamps: false,
   underscored: true,
 });
+
 
 module.exports = Graduate;

@@ -13,7 +13,9 @@ const {
   VacancySkill,
   Skill,
   Graduate,
-  EmployerUniversityMessage
+  EmployerUniversityMessage,
+  Specialization,
+  UniversitySpecialization
 } = require('./models');
 
 const app = express();
@@ -48,6 +50,21 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+////////
+app.get('/api/universities', async (req, res) => {
+  try {
+    const universities = await University.findAll({
+      attributes: ['university_id', 'name'],
+      order: [['name', 'ASC']]
+    });
+    res.json(universities);
+  } catch (err) {
+    console.error('Ошибка получения вузов:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// Получение профиля абитуриента
 // Получение профиля абитуриента
 app.get('/api/applicant/profile', authenticateToken, async (req, res) => {
   try {
@@ -56,8 +73,21 @@ app.get('/api/applicant/profile', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Доступ запрещён' });
     }
 
+    // Вот сюда вставьте ваш код:
     const applicant = await Applicant.findByPk(req.user.applicant_id, {
-      attributes: ['applicant_id', 'full_name', 'email', 'phone']
+      attributes: ['applicant_id', 'full_name', 'email', 'phone', 'university_id', 'specialization_id'],
+      include: [
+        {
+          model: University,
+          as: 'university',
+          attributes: ['university_id', 'name']
+        },
+        {
+          model: Specialization,
+          as: 'specialization',
+          attributes: ['specialization_id', 'name']
+        }
+      ]
     });
 
     if (!applicant) {
@@ -71,6 +101,43 @@ app.get('/api/applicant/profile', authenticateToken, async (req, res) => {
   }
 });
 
+////////////////
+app.get('/api/universities/:universityId/specializations', async (req, res) => {
+  const universityId = parseInt(req.params.universityId, 10);
+  if (isNaN(universityId)) {
+    return res.status(400).json({ error: 'Неверный ID университета' });
+  }
+  try {
+    // Получаем все уникальные специальности для вуза
+    const specs = await UniversitySpecialization.findAll({
+      where: { university_id: universityId },
+      attributes: ['specialization_id'],
+      group: ['specialization_id']
+    });
+
+    const result = [];
+    for (const { specialization_id } of specs) {
+      const spec = await Specialization.findByPk(specialization_id, { attributes: ['specialization_id', 'name'] });
+      const exams = await UniversitySpecialization.findAll({
+        where: { university_id: universityId, specialization_id },
+        attributes: ['exam_name', 'pass_mark']
+      });
+      result.push({
+        specialization_id,
+        name: spec ? spec.name : '',
+        exams: exams.map(e => ({
+          exam_name: e.exam_name,
+          pass_mark: e.pass_mark
+        }))
+      });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Ошибка получения специальностей и экзаменов для университета:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // Обновление профиля абитуриента
 app.put('/api/applicant/profile', authenticateToken, async (req, res) => {
   try {
@@ -78,7 +145,7 @@ app.put('/api/applicant/profile', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Доступ запрещён' });
     }
 
-    const { full_name, phone } = req.body;
+    const { full_name, phone, university_id, specialization_id } = req.body;
 
     const applicant = await Applicant.findByPk(req.user.applicant_id);
     if (!applicant) {
@@ -87,6 +154,8 @@ app.put('/api/applicant/profile', authenticateToken, async (req, res) => {
 
     if (full_name !== undefined) applicant.full_name = full_name;
     if (phone !== undefined) applicant.phone = phone;
+    if (university_id !== undefined) applicant.university_id = university_id;
+    if (specialization_id !== undefined) applicant.specialization_id = specialization_id;
 
     await applicant.save();
 
@@ -96,6 +165,7 @@ app.put('/api/applicant/profile', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
+
 //////////////////
 app.get('/api/applicant/vacancies', authenticateToken, async (req, res) => {
   try {
@@ -284,6 +354,60 @@ app.post('/api/employer/vacancies', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+/////////
+app.get('/api/employers', async (req, res) => {
+  try {
+    const employers = await Employer.findAll({
+      attributes: ['employer_id', 'company_name'],
+      order: [['company_name', 'ASC']]
+    });
+    res.json(employers);
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+//////////
+// Модель EmployerUniversityMessage уже импортирована
+app.post('/api/university/messages', authenticateToken, async (req, res) => {
+  try {
+    // Проверяем, что пользователь — вуз
+    if (!req.user.university_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    const { employer_id, message } = req.body;
+    if (!employer_id || !message) {
+      return res.status(400).json({ error: 'Не указан работодатель или текст сообщения' });
+    }
+    const newMessage = await EmployerUniversityMessage.create({
+      employer_id,
+      university_id: req.user.university_id,
+      message,
+      status: 'sent',
+      created_at: new Date(),
+    });
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error('Ошибка отправки сообщения вузом работодателю:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+/////////////
+app.get('/api/university/messages', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.university_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    const messages = await EmployerUniversityMessage.findAll({
+      where: { university_id: req.user.university_id },
+      order: [['created_at', 'DESC']]
+    });
+    res.json(messages);
+  } catch (error) {
+    console.error('Ошибка получения истории сообщений для вуза:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // Получение вакансий работодателя с требованиями и навыками
 app.get('/api/employer/vacancies', authenticateToken, async (req, res) => {
   try {
@@ -343,18 +467,28 @@ app.put('/api/employer/profile', authenticateToken, async (req, res) => {
 // Просмотр профилей выпускников с фильтрацией
 app.get('/api/graduates', authenticateToken, async (req, res) => {
   try {
-    const { specialty, university } = req.query;
+    const { university_id } = req.query;
     const where = {};
-    if (specialty) where.specialty = specialty;
-    if (university) where.university = university;
+    if (university_id) where.university_id = university_id;
 
-    const graduates = await Graduate.findAll({ where });
+    const graduates = await Graduate.findAll({
+      where,
+      include: [
+        {
+          model: University,
+          as: 'university',
+          attributes: ['university_id', 'name']
+        }
+      ]
+    });
     res.json(graduates);
   } catch (error) {
     console.error('Error fetching graduates:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
 // Удаление вакансии работодателем
 app.delete('/api/employer/vacancies/:id', authenticateToken, async (req, res) => {
   try {
@@ -403,17 +537,41 @@ app.post('/api/employer/messages', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+/////////
+// Получение профиля вуза
+app.get('/api/university/profile', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.university_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    const university = await University.findByPk(req.user.university_id, {
+      attributes: ['university_id', 'name', 'contact_email']
+    });
+    if (!university) {
+      return res.status(404).json({ error: 'Вуз не найден' });
+    }
+    res.json(university);
+  } catch (error) {
+    console.error('Ошибка получения профиля вуза:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
 
 // Получение истории сообщений работодателя
 app.get('/api/employer/messages', authenticateToken, async (req, res) => {
   try {
-    const messages = await EmployerUniversityMessage.findAll({ where: { employer_id: req.user.employer_id } });
+    const messages = await EmployerUniversityMessage.findAll({
+      where: { employer_id: req.user.employer_id },
+      order: [['created_at', 'DESC']]
+    });
     res.json(messages);
   } catch (error) {
     console.error('Error fetching messages:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
 
 // Обработчики ошибок
 app.use((err, req, res, next) => {

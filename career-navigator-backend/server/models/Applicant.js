@@ -23,6 +23,22 @@ const Applicant = db.define('Applicant', {
   phone: {
     type: DataTypes.STRING(20),
   },
+  university_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'universities',
+      key: 'university_id'
+    }
+  },
+  specialization_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'specializations',
+      key: 'specialization_id'
+    }
+  },
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
@@ -31,5 +47,6 @@ const Applicant = db.define('Applicant', {
   tableName: 'applicants',
   timestamps: false,
 });
+
 
 module.exports = Applicant;

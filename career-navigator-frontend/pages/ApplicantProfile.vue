@@ -1,75 +1,140 @@
 <template>
-  <div class="applicant-profile">
-    <button @click="logout">Выход</button>
-    <h2>Профиль абитуриента</h2>
-    <form @submit.prevent="updateProfile">
-      <label>ФИО</label>
-      <input v-model="applicant.full_name" required />
+  <div>
+    <!-- Профиль абитуриента -->
+    <div v-if="!showVacancies && !showPassMarks" class="applicant-profile">
+      <button @click="logout">Выход</button>
+      <h2>Профиль абитуриента</h2>
+      <form @submit.prevent="updateProfile">
+        <label>ФИО</label>
+        <input v-model="applicant.full_name" required />
 
-      <label>Email</label>
-      <input v-model="applicant.email" type="email" disabled />
+        <label>Email</label>
+        <input v-model="applicant.email" type="email" disabled />
 
-      <label>Телефон</label>
-      <input v-model="applicant.phone" />
-      
-      <button type="submit">Сохранить</button>
-    </form>
-    <p v-if="message" class="message">{{ message }}</p>
+        <label>Телефон</label>
+        <input v-model="applicant.phone" />
 
-    <hr />
+        <label>ВУЗ</label>
+        <select v-model="applicant.university_id" required>
+          <option v-if="universitiesLoading" disabled>Загрузка вузов...</option>
+          <option 
+            v-for="university in universities" 
+            :key="university.university_id" 
+            :value="university.university_id"
+          >
+            {{ university.name }}
+          </option>
+        </select>
 
-    <h2>Вакансии с требованиями к образованию</h2>
-    <div v-if="vacanciesLoading">Загрузка вакансий...</div>
-    <div v-else>
-      <div v-if="vacancies.length === 0">Вакансии не найдены</div>
-      <ul>
-        <li v-for="vacancy in vacancies" :key="vacancy.vacancy_id" class="vacancy-item">
-  <h3>{{ vacancy.title }}</h3>
-  <p><strong>Описание:</strong> {{ vacancy.description }}</p>
-  <p><strong>Компания:</strong> {{ vacancy.employer.company_name }}</p>
-  <div v-if="vacancy.educationRequirements.length">
-    <h4>Требования к образованию:</h4>
-    <ul>
-      <li v-for="req in vacancy.educationRequirements" :key="req.requirement_id">Уровень: {{ req.degree_level }}</li>
-    </ul>
-  </div>
-  <div v-if="vacancy.skills && vacancy.skills.length">
-    <h4>Навыки:</h4>
-    <ul>
-      <li v-for="skill in vacancy.skills" :key="skill.skill_id">{{ skill.name }}</li>
-    </ul>
-  </div>
-</li>
+        <label>Специальность</label>
+        <select v-model="applicant.specialization_id" required :disabled="specializationsLoading || specializations.length === 0">
+          <option v-if="specializationsLoading" disabled>Загрузка специальностей...</option>
+          <option 
+            v-for="specialization in specializations" 
+            :key="specialization.specialization_id" 
+            :value="specialization.specialization_id"
+          >
+            {{ specialization.name }}
+          </option>
+        </select>
 
-      </ul>
+        <button type="submit">Сохранить</button>
+      </form>
+      <p v-if="message" class="message">{{ message }}</p>
+      <hr />
+      <div class="navigation-buttons">
+        <button class="nav-button" @click="showVacancies = true">
+          Просмотреть все вакансии
+        </button>
+        <button class="nav-button" @click="showPassMarks = true">
+    ВУЗ
+  </button>
+      </div>
     </div>
+    <!-- Список вакансий -->
+    <VacanciesPage
+  v-if="showVacancies"
+  :token="token"
+  @back="showVacancies = false"
+/>
+
+<!-- Фрагмент с проходными баллами -->
+<PassMarksForm
+  v-if="showPassMarks"
+  @back="showPassMarks = false"
+/>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import VacanciesPage from './VacanciesPage.vue'
+import PassMarksForm from './PassMarksForm.vue'
+
+
 const applicant = ref({
   full_name: '',
   email: '',
-  phone: ''
+  phone: '',
+  university_id: null,
+  specialization_id: null
 })
+
 const message = ref('')
 const token = ref('')
+const showVacancies = ref(false)
+const showPassMarks = ref(false)
 
-const vacancies = ref([])
-const vacanciesLoading = ref(false)
+
+const universities = ref([])
+const specializations = ref([])
+const universitiesLoading = ref(false)
+const specializationsLoading = ref(false)
+
 const router = useRouter()
+
 onMounted(() => {
   token.value = localStorage.getItem('auth_token')
   fetchProfile()
-  fetchVacancies()
+  fetchUniversities()
 })
+
+watch(() => applicant.value.university_id, async (newUniversityId) => {
+  if (!newUniversityId) {
+    specializations.value = []
+    applicant.value.specialization_id = null
+    return
+  }
+  specializationsLoading.value = true
+  try {
+    const res = await fetch(`/api/universities/${newUniversityId}/specializations`, {
+      headers: { Authorization: `Bearer ${token.value}` }
+    })
+    if (res.ok) {
+      specializations.value = await res.json()
+      if (!specializations.value.find(s => s.specialization_id === applicant.value.specialization_id)) {
+        applicant.value.specialization_id = null
+      }
+    } else {
+      specializations.value = []
+      applicant.value.specialization_id = null
+    }
+  } catch (e) {
+    console.error('Ошибка загрузки специальностей для вуза', e)
+    specializations.value = []
+    applicant.value.specialization_id = null
+  } finally {
+    specializationsLoading.value = false
+  }
+})
+
 const logout = () => {
-  localStorage.removeItem('auth_token') // удаляем токен
-  token.value = '' // сбрасываем реактивную переменную token
-  router.push('/login') // перенаправляем на страницу логина
+  localStorage.removeItem('auth_token')
+  token.value = ''
+  router.push('/login')
 }
+
 const fetchProfile = async () => {
   if (!token.value) {
     message.value = 'Токен не найден'
@@ -111,26 +176,19 @@ const updateProfile = async () => {
   }
 }
 
-const fetchVacancies = async () => {
-  if (!token.value) {
-    message.value = 'Токен не найден'
-    return
-  }
-  vacanciesLoading.value = true
+const fetchUniversities = async () => {
+  universitiesLoading.value = true
   try {
-    const res = await fetch('/api/applicant/vacancies', {
+    const res = await fetch('/api/universities', {
       headers: { Authorization: `Bearer ${token.value}` }
     })
     if (res.ok) {
-      vacancies.value = await res.json()
-    } else {
-      message.value = 'Ошибка загрузки вакансий'
+      universities.value = await res.json()
     }
   } catch (e) {
-    console.error('Ошибка загрузки вакансий', e)
-    message.value = 'Ошибка сети'
+    console.error('Ошибка загрузки вузов:', e)
   } finally {
-    vacanciesLoading.value = false
+    universitiesLoading.value = false
   }
 }
 </script>
@@ -146,7 +204,7 @@ label {
   margin-top: 15px;
   font-weight: bold;
 }
-input {
+input, select {
   width: 100%;
   padding: 8px;
   margin-top: 5px;
@@ -165,9 +223,20 @@ button {
   margin-top: 15px;
   color: green;
 }
-.vacancy-item {
-  margin-bottom: 20px;
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 10px;
+.navigation-buttons {
+  margin-top: 30px;
+  text-align: center;
+}
+.nav-button {
+  display: inline-block;
+  padding: 12px 25px;
+  background-color: #2ecc71;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background-color 0.3s;
+}
+.nav-button:hover {
+  background-color: #27ae60;
 }
 </style>

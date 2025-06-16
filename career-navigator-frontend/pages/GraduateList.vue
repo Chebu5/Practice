@@ -1,46 +1,56 @@
 <template>
   <div class="graduates-container">
     <h2>Профили выпускников</h2>
-
     <div class="filters">
-      <label>Фильтр по специальности</label>
-      <input v-model="filterSpecialty" placeholder="Специальность" />
-
       <label>Фильтр по вузу</label>
-      <input v-model="filterUniversity" placeholder="Вуз" />
-
+      <select v-model.number="filterUniversityId">
+        <option value="">Все вузы</option>
+        <option v-for="u in universities" :key="u.university_id" :value="u.university_id">
+          {{ u.name }}
+        </option>
+      </select>
       <button @click="fetchGraduates" :disabled="loading">
         {{ loading ? 'Загрузка...' : 'Поиск' }}
       </button>
     </div>
-
     <ul class="graduates-list">
       <li v-for="graduate in graduates" :key="graduate.graduate_id" class="graduate-item">
-        <strong>{{ graduate.full_name }}</strong> — {{ graduate.specialty }} — {{ graduate.university }}
+        <strong>{{ graduate.full_name }}</strong><br>
+        <span>Вуз: {{ graduate.university?.name || graduate.university_id }}</span><br>
+        <span>Специальность: {{ graduate.specialty }}</span><br>
+        <span>Email: {{ graduate.contact_email }}</span><br>
+        <span>Телефон: {{ graduate.contact_phone }}</span>
       </li>
     </ul>
-
     <div v-if="error" class="error">{{ error }}</div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
 const graduates = ref([])
-const filterSpecialty = ref('')
-const filterUniversity = ref('')
+const filterUniversityId = ref('')
 const loading = ref(false)
 const error = ref(null)
+const universities = ref([])
 
 const token = localStorage.getItem('auth_token')
+
+const fetchUniversities = async () => {
+  try {
+    const res = await fetch('/api/universities')
+    if (res.ok) {
+      universities.value = await res.json()
+    }
+  } catch (e) {}
+}
 
 const fetchGraduates = async () => {
   loading.value = true
   error.value = null
   const params = new URLSearchParams()
-  if (filterSpecialty.value) params.append('specialty', filterSpecialty.value)
-  if (filterUniversity.value) params.append('university', filterUniversity.value)
+  if (filterUniversityId.value) params.append('university_id', filterUniversityId.value)
 
   try {
     const res = await fetch('/api/graduates?' + params.toString(), {
@@ -58,9 +68,11 @@ const fetchGraduates = async () => {
   }
 }
 
-fetchGraduates()
+onMounted(() => {
+  fetchUniversities()
+  fetchGraduates()
+})
 </script>
-
 <style scoped>
 .graduates-container {
   max-width: 700px;
@@ -86,7 +98,7 @@ fetchGraduates()
   color: #333;
 }
 
-.filters input {
+.filters select {
   padding: 8px 10px;
   border: 1px solid #ccc;
   border-radius: 6px;

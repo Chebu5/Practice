@@ -3,8 +3,17 @@
     <h2>Сообщения вузам</h2>
 
     <form @submit.prevent="sendMessage" class="message-form">
-      <label for="university_id">Выберите вуз (ID)</label>
-      <input v-model.number="university_id" id="university_id" required placeholder="ID вуза" />
+      <label>Выберите вуз:</label>
+      <select v-model="selectedUniversityId" required>
+        <option disabled value="">Выберите вуз из списка</option>
+        <option
+          v-for="university in universities"
+          :key="university.university_id"
+          :value="university.university_id"
+        >
+          {{ university.name }}
+        </option>
+      </select>
 
       <label for="message">Сообщение</label>
       <textarea v-model="message" id="message" required placeholder="Текст сообщения"></textarea>
@@ -15,9 +24,9 @@
     <h3>История сообщений</h3>
     <ul class="messages-list">
       <li v-for="msg in messages" :key="msg.message_id" class="message-item">
-        <strong>Вуз ID: {{ msg.university_id }}</strong> — {{ msg.message }} —
-        <span :class="{ 'status-sent': msg.status === 'Отправлено', 'status-received': msg.status === 'Получено' }">
-          {{ msg.status }}
+        <strong>{{ getUniversityName(msg.university_id) }}</strong> — {{ msg.message }} —
+        <span :class="{ 'status-sent': msg.status === 'sent', 'status-received': msg.status === 'received' }">
+          {{ msg.status === 'sent' ? 'Отправлено' : msg.status === 'received' ? 'Получено' : msg.status }}
         </span> —
         {{ new Date(msg.created_at).toLocaleString() }}
       </li>
@@ -28,12 +37,32 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 
-const university_id = ref(null);
+const selectedUniversityId = ref('');
 const message = ref('');
 const messages = ref([]);
+const universities = ref([]);
 
 const token = localStorage.getItem('auth_token');
 
+// Загрузка списка вузов
+const fetchUniversities = async () => {
+  try {
+    const res = await fetch('/api/universities');
+    if (res.ok) {
+      universities.value = await res.json();
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки вузов:', error);
+  }
+};
+
+// Получение названия вуза по ID
+const getUniversityName = (id) => {
+  const university = universities.value.find(u => u.university_id === id);
+  return university ? university.name : `Вуз ID: ${id}`;
+};
+
+// Загрузка истории сообщений
 const fetchMessages = async () => {
   try {
     const res = await fetch('/api/employer/messages', {
@@ -41,26 +70,30 @@ const fetchMessages = async () => {
     });
     if (res.ok) {
       messages.value = await res.json();
-    } else {
-      alert('Ошибка загрузки сообщений');
     }
   } catch (error) {
-    console.error('Ошибка при загрузке сообщений:', error);
-    alert('Ошибка при загрузке сообщений: ' + error.message);
+    console.error('Ошибка загрузки сообщений:', error);
   }
 };
 
+// Отправка сообщения
 const sendMessage = async () => {
   try {
     const res = await fetch('/api/employer/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ university_id: university_id.value, message: message.value }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        university_id: selectedUniversityId.value,
+        message: message.value
+      }),
     });
+
     if (res.ok) {
-      alert('Сообщение отправлено');
       message.value = '';
-      university_id.value = null;
+      selectedUniversityId.value = '';
       await fetchMessages();
     } else {
       const data = await res.json();
@@ -68,14 +101,38 @@ const sendMessage = async () => {
     }
   } catch (error) {
     console.error('Ошибка при отправке сообщения:', error);
-    alert('Ошибка при отправке сообщения: ' + error.message);
   }
 };
 
-onMounted(fetchMessages);
+// Загрузка данных при монтировании компонента
+onMounted(() => {
+  fetchUniversities();
+  fetchMessages();
+});
 </script>
 
 <style scoped>
+select {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+  width: 100%;
+  margin-bottom: 15px;
+  background-color: white;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23333%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px auto;
+}
+
+select:focus {
+  outline: none;
+  border-color: #5cb85c;
+  box-shadow: 0 0 8px rgba(92, 184, 92, 0.3);
+}
+
 .messages-container {
   max-width: 800px;
   margin: 20px auto;

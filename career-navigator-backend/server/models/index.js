@@ -7,6 +7,25 @@ const Graduate = require('./Graduate');
 const EducationRequirement = require('./EducationRequirement');
 const Skill = require('./Skill');
 const VacancySkill = require('./VacancySkill');
+const Specialization = require('./Specialization'); // импорт модели специальностей
+const UniversitySpecialization = require('./universitySpecialization')
+// Связь многие-ко-многим между университетами и специальностями
+Graduate.belongsTo(University, { foreignKey: 'university_id', as: 'university' });
+University.belongsToMany(Specialization, {
+  through: 'university_specializations',
+  foreignKey: 'university_id',
+  otherKey: 'specialization_id',
+  as: 'specializations'
+});
+
+Specialization.belongsToMany(University, {
+  through: 'university_specializations',
+  foreignKey: 'specialization_id',
+  otherKey: 'university_id',
+  as: 'universities'
+});
+Applicant.belongsTo(University, { foreignKey: 'university_id', as: 'university' });
+Applicant.belongsTo(Specialization, { foreignKey: 'specialization_id', as: 'specialization' });
 
 // Настройка ассоциаций
 Vacancy.belongsTo(Employer, { foreignKey: 'employer_id', as: 'employer' });
@@ -30,7 +49,9 @@ const models = {
   Graduate,
   EducationRequirement,
   Skill,
-  VacancySkill
+  VacancySkill,
+  Specialization,
+  UniversitySpecialization
 };
 
 module.exports = models;
