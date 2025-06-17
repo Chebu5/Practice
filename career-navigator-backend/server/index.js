@@ -51,6 +51,20 @@ const authenticateToken = (req, res, next) => {
   });
 };
 ////////
+app.get('/api/specializations', async (req, res) => {
+  try {
+    const specs = await Specialization.findAll({
+      attributes: ['specialization_id', 'name'],
+      order: [['name', 'ASC']]
+    });
+    res.json(specs);
+  } catch (error) {
+    console.error('Ошибка получения специальностей:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+/////////
 app.get('/api/universities', async (req, res) => {
   try {
     const universities = await University.findAll({

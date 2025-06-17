@@ -1,6 +1,6 @@
 <template>
   <div class="university-profile">
-    <template v-if="!showMessages">
+    <template v-if="currentView === 'profile'">
       <h2>Профиль Вуза</h2>
       <form @submit.prevent="updateProfile">
         <label>Название вуза</label>
@@ -8,12 +8,24 @@
         <button type="submit">Сохранить</button>
       </form>
       <p v-if="message" class="message">{{ message }}</p>
-      <button @click="showMessages = true" class="switch-btn">Перейти к сообщениям</button>
+      <button @click="currentView = 'messages'" class="switch-btn">Перейти к сообщениям</button>
+      <button @click="currentView = 'addExamScores'" class="switch-btn">Добавить баллы экзаменов</button>
+      <button @click="currentView = 'addGraduate'" class="switch-btn">Добавить выпускника</button>
       <button @click="logout" class="logout-btn">Выйти</button>
     </template>
-    <template v-else>
+    <template v-else-if="currentView === 'messages'">
       <UniversityMessages />
-      <button @click="showMessages = false" class="switch-btn">Назад к профилю</button>
+      <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
+      <button @click="logout" class="logout-btn">Выйти</button>
+    </template>
+    <template v-else-if="currentView === 'addExamScores'">
+      <AddExamScores />
+      <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
+      <button @click="logout" class="logout-btn">Выйти</button>
+    </template>
+    <template v-else-if="currentView === 'addGraduate'">
+      <AddGraduate />
+      <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
       <button @click="logout" class="logout-btn">Выйти</button>
     </template>
   </div>
@@ -22,14 +34,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import UniversityMessages from './UniversityMessages.vue' // путь укажите свой
+import UniversityMessages from './UniversityMessages.vue'
+import AddExamScores from './AddExamScores.vue'
+import AddGraduate from './AddGraduate.vue'
 
 const university = ref({
   name: '',
   phone: ''
 })
 const message = ref('')
-const showMessages = ref(false)
+const currentView = ref('profile')
 
 const token = ref('')
 const router = useRouter()
@@ -77,7 +91,6 @@ const updateProfile = async () => {
   }
 }
 
-// Кнопка выхода
 const logout = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('auth_token')
