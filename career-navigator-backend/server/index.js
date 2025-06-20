@@ -51,6 +51,125 @@ const authenticateToken = (req, res, next) => {
   });
 };
 ////////
+app.get('/api/university/exams', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.university_id) return res.status(403).json({ error: 'Доступ запрещён' });
+    const { specialization_id } = req.query;
+    const where = { university_id: req.user.university_id };
+    if (specialization_id) where.specialization_id = specialization_id;
+    const exams = await UniversitySpecialization.findAll({ where });
+    res.json(exams);
+  } catch (error) {
+    console.error('Ошибка получения экзаменов:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+// Удаление экзамена для специальности (university_specializations)
+app.delete('/api/university/exams', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.university_id) return res.status(403).json({ error: 'Доступ запрещён' });
+    const { specialization_id, exam_name } = req.query;
+    if (!specialization_id || !exam_name) {
+      return res.status(400).json({ error: 'Не хватает параметров' });
+    }
+    const deleted = await UniversitySpecialization.destroy({
+      where: {
+        university_id: req.user.university_id,
+        specialization_id,
+        exam_name
+      }
+    });
+    if (deleted) {
+      res.json({ message: 'Экзамен удалён' });
+    } else {
+      res.status(404).json({ error: 'Экзамен не найден' });
+    }
+  } catch (error) {
+    console.error('Ошибка удаления экзамена:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+////////
+app.post('/api/university/exams', authenticateToken, async (req, res) => {
+  try {
+    // Проверяем, что пользователь — вуз
+    if (!req.user.university_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    const { specialization_id, exam_name, pass_mark } = req.body;
+    if (!specialization_id || !exam_name || pass_mark == null) {
+      return res.status(400).json({ error: 'Заполните все поля' });
+    }
+
+    // Добавляем или обновляем запись
+    const [record, created] = await UniversitySpecialization.upsert({
+      university_id: req.user.university_id,
+      specialization_id,
+      exam_name,
+      pass_mark
+    });
+
+    res.status(201).json({ message: created ? 'Экзамен добавлен' : 'Экзамен обновлён', record });
+  } catch (error) {
+    console.error('Ошибка добавления экзамена:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+////////
+app.put('/api/university/exams', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.university_id) return res.status(403).json({ error: 'Доступ запрещён' });
+    const { specialization_id, exam_name, pass_mark } = req.body;
+    if (!specialization_id || !exam_name || pass_mark == null) {
+      return res.status(400).json({ error: 'Заполните все поля' });
+    }
+    const [updated] = await UniversitySpecialization.update(
+      { pass_mark },
+      {
+        where: {
+          university_id: req.user.university_id,
+          specialization_id,
+          exam_name
+        }
+      }
+    );
+    if (updated) {
+      res.json({ message: 'Экзамен обновлён' });
+    } else {
+      res.status(404).json({ error: 'Экзамен не найден' });
+    }
+  } catch (error) {
+    console.error('Ошибка обновления экзамена:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+////////
+app.post('/api/graduates', authenticateToken, async (req, res) => {
+  try {
+    // Для вуза: university_id берём из токена
+    if (!req.user.university_id) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    const { full_name, specialty, contact_email, contact_phone } = req.body;
+    if (!full_name || !contact_email || !contact_phone) {
+      return res.status(400).json({ error: 'Заполните все поля' });
+    }
+    const graduate = await Graduate.create({
+      full_name,
+      specialty,
+      university_id: req.user.university_id,
+      contact_email,
+      contact_phone
+    });
+    res.status(201).json({ message: 'Выпускник добавлен', graduate });
+  } catch (error) {
+    console.error('Ошибка добавления выпускника:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+////////
 app.get('/api/specializations', async (req, res) => {
   try {
     const specs = await Specialization.findAll({

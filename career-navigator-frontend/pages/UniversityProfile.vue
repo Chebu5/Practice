@@ -1,35 +1,40 @@
 <template>
   <div class="university-profile">
+    <div class="top-bar">
+      <div class="top-buttons">
+        <button @click="currentView = 'messages'" class="switch-btn">Сообщения</button>
+        <button @click="currentView = 'addExamScores'" class="switch-btn">Экзамены</button>
+        <button @click="currentView = 'addGraduate'" class="switch-btn">Выпускники</button>
+      </div>
+      <button @click="logout" class="logout-btn">Выйти</button>
+    </div>
     <template v-if="currentView === 'profile'">
       <h2>Профиль Вуза</h2>
       <form @submit.prevent="updateProfile">
-        <label>Название вуза</label>
-        <input v-model="university.name" required />
-        <button type="submit">Сохранить</button>
-      </form>
+  <label>Название вуза</label>
+  <input v-model="university.name" required />
+  <button type="submit" class="switch-btn">Сохранить</button>
+</form>
+
       <p v-if="message" class="message">{{ message }}</p>
-      <button @click="currentView = 'messages'" class="switch-btn">Перейти к сообщениям</button>
-      <button @click="currentView = 'addExamScores'" class="switch-btn">Добавить баллы экзаменов</button>
-      <button @click="currentView = 'addGraduate'" class="switch-btn">Добавить выпускника</button>
-      <button @click="logout" class="logout-btn">Выйти</button>
     </template>
-    <template v-else-if="currentView === 'messages'">
-      <UniversityMessages />
-      <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
-      <button @click="logout" class="logout-btn">Выйти</button>
-    </template>
-    <template v-else-if="currentView === 'addExamScores'">
-      <AddExamScores />
-      <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
-      <button @click="logout" class="logout-btn">Выйти</button>
-    </template>
-    <template v-else-if="currentView === 'addGraduate'">
-      <AddGraduate />
-      <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
-      <button @click="logout" class="logout-btn">Выйти</button>
+    <template v-else>
+      <div class="buttons-bottom">
+        <button @click="currentView = 'profile'" class="switch-btn">Назад к профилю</button>
+      </div>
+      <template v-if="currentView === 'messages'">
+        <UniversityMessages />
+      </template>
+      <template v-else-if="currentView === 'addExamScores'">
+        <AddExamScores />
+      </template>
+      <template v-else-if="currentView === 'addGraduate'">
+        <AddGraduate />
+      </template>
     </template>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted } from 'vue'
@@ -104,37 +109,68 @@ const logout = () => {
   max-width: 600px;
   margin: 20px auto;
   font-family: Arial, sans-serif;
+  padding: 20px;
 }
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.top-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.logout-btn {
+  background-color: #e74c3c;
+  margin-left: 20px;
+  padding: 10px 15px;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.switch-btn {
+  background-color: #5bc0de;
+  padding: 10px 15px;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.buttons-bottom {
+  margin-bottom: 20px;
+}
+
 label {
   display: block;
   margin-top: 15px;
   font-weight: bold;
 }
+
 input {
   width: 100%;
   padding: 8px;
   margin-top: 5px;
   box-sizing: border-box;
 }
-button {
+
+form button[type="submit"] {
   margin-top: 20px;
-  padding: 10px 15px;
-  background-color: #3498db;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
 }
-.switch-btn {
-  margin-top: 15px;
-  background-color: #5bc0de;
-}
-.logout-btn {
-  margin-top: 15px;
-  background-color: #e74c3c;
-}
+
 .message {
   margin-top: 15px;
   color: green;
 }
+
 </style>

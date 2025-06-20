@@ -1,8 +1,13 @@
 <template>
-  <div>
-    <!-- Профиль абитуриента -->
-    <div v-if="!showVacancies && !showPassMarks" class="applicant-profile">
-      <button @click="logout">Выход</button>
+  <div class="applicant-profile">
+    <div class="top-bar">
+      <div class="top-buttons">
+        <button class="switch-btn" @click="showVacancies = true">Вакансии</button>
+        <button class="switch-btn" @click="showPassMarks = true">ВУЗ</button>
+      </div>
+      <button class="logout-btn" @click="logout">Выход</button>
+    </div>
+    <div v-if="!showVacancies && !showPassMarks">
       <h2>Профиль абитуриента</h2>
       <form @submit.prevent="updateProfile">
         <label>ФИО</label>
@@ -13,56 +18,19 @@
 
         <label>Телефон</label>
         <input v-model="applicant.phone" />
-
-        <label>ВУЗ</label>
-        <select v-model="applicant.university_id" required>
-          <option v-if="universitiesLoading" disabled>Загрузка вузов...</option>
-          <option 
-            v-for="university in universities" 
-            :key="university.university_id" 
-            :value="university.university_id"
-          >
-            {{ university.name }}
-          </option>
-        </select>
-
-        <label>Специальность</label>
-        <select v-model="applicant.specialization_id" required :disabled="specializationsLoading || specializations.length === 0">
-          <option v-if="specializationsLoading" disabled>Загрузка специальностей...</option>
-          <option 
-            v-for="specialization in specializations" 
-            :key="specialization.specialization_id" 
-            :value="specialization.specialization_id"
-          >
-            {{ specialization.name }}
-          </option>
-        </select>
-
-        <button type="submit">Сохранить</button>
+        <button type="submit" class="switch-btn">Сохранить</button>
       </form>
       <p v-if="message" class="message">{{ message }}</p>
-      <hr />
-      <div class="navigation-buttons">
-        <button class="nav-button" @click="showVacancies = true">
-          Просмотреть все вакансии
-        </button>
-        <button class="nav-button" @click="showPassMarks = true">
-    ВУЗ
-  </button>
-      </div>
     </div>
-    <!-- Список вакансий -->
     <VacanciesPage
-  v-if="showVacancies"
-  :token="token"
-  @back="showVacancies = false"
-/>
-
-<!-- Фрагмент с проходными баллами -->
-<PassMarksForm
-  v-if="showPassMarks"
-  @back="showPassMarks = false"
-/>
+      v-if="showVacancies"
+      :token="token"
+      @back="showVacancies = false"
+    />
+    <PassMarksForm
+      v-if="showPassMarks"
+      @back="showPassMarks = false"
+    />
   </div>
 </template>
 
@@ -71,7 +39,6 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import VacanciesPage from './VacanciesPage.vue'
 import PassMarksForm from './PassMarksForm.vue'
-
 
 const applicant = ref({
   full_name: '',
@@ -85,7 +52,6 @@ const message = ref('')
 const token = ref('')
 const showVacancies = ref(false)
 const showPassMarks = ref(false)
-
 
 const universities = ref([])
 const specializations = ref([])
@@ -198,45 +164,63 @@ const fetchUniversities = async () => {
   max-width: 600px;
   margin: 20px auto;
   font-family: Arial, sans-serif;
+  padding: 20px;
 }
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.top-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.logout-btn {
+  background-color: #e74c3c;
+  margin-left: 20px;
+  padding: 10px 15px;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.switch-btn {
+  background-color: #5bc0de;
+  padding: 10px 15px;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
 label {
   display: block;
   margin-top: 15px;
   font-weight: bold;
 }
+
 input, select {
   width: 100%;
   padding: 8px;
   margin-top: 5px;
   box-sizing: border-box;
 }
-button {
+
+form button[type="submit"] {
   margin-top: 20px;
-  padding: 10px 15px;
-  background-color: #3498db;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
 }
+
 .message {
   margin-top: 15px;
   color: green;
-}
-.navigation-buttons {
-  margin-top: 30px;
-  text-align: center;
-}
-.nav-button {
-  display: inline-block;
-  padding: 12px 25px;
-  background-color: #2ecc71;
-  color: white;
-  text-decoration: none;
-  border-radius: 6px;
-  transition: background-color 0.3s;
-}
-.nav-button:hover {
-  background-color: #27ae60;
 }
 </style>

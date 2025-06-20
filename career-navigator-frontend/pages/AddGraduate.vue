@@ -22,7 +22,7 @@
 
 <script setup>
 import { ref } from 'vue'
-
+const token = localStorage.getItem('auth_token')
 const fullName = ref('')
 const specialty = ref('')
 const email = ref('')
@@ -30,13 +30,34 @@ const phone = ref('')
 const message = ref('')
 
 const submitGraduate = async () => {
-  // Здесь должен быть реальный запрос на backend (например, /api/graduates)
-  // Пример заглушки:
-  message.value = `Выпускник ${fullName.value} успешно добавлен!`
-  fullName.value = ''
-  specialty.value = ''
-  email.value = ''
-  phone.value = ''
+  message.value = ''
+  try {
+    const res = await fetch('/api/graduates', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        full_name: fullName.value,
+        specialty: specialty.value,
+        contact_email: email.value,
+        contact_phone: phone.value
+      })
+    })
+    const data = await res.json()
+    if (res.ok) {
+      message.value = data.message || 'Выпускник успешно добавлен!'
+      fullName.value = ''
+      specialty.value = ''
+      email.value = ''
+      phone.value = ''
+    } else {
+      message.value = data.error || 'Ошибка добавления'
+    }
+  } catch (e) {
+    message.value = 'Ошибка сети'
+  }
 }
 </script>
 
